@@ -1,6 +1,7 @@
 import shaderString from '../assets/shaders/cellShader.wgsl?raw'
 
 const GRID_SIZE = 32;
+const UPDATE_INTERVAL = 200; 
 
 export default class ReactionDiffusionModel {
     
@@ -13,6 +14,13 @@ export default class ReactionDiffusionModel {
     cellShaderModule: GPUShaderModule
     uniformArray: Float32Array
     uniformBuffer: GPUBuffer
+    cellStateArray: Uint32Array
+    cellStateStorage: GPUBuffer[]
+
+    cellPipeline: GPURenderPipeline
+    bindGroups: GPUBindGroup[]
+
+    step = 0
     
     vertices = new Float32Array([
         //   X,    Y,
@@ -41,14 +49,93 @@ export default class ReactionDiffusionModel {
             label: "Cell shader",
             code: shaderString
         });
-
+        
         this.uniformArray = new Float32Array([GRID_SIZE, GRID_SIZE]);
         this.uniformBuffer = device.createBuffer({
             label: "Grid Uniforms",
             size: this.uniformArray.byteLength,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
+        
+        this.cellStateArray = new Uint32Array(GRID_SIZE * GRID_SIZE);
+        this.cellStateStorage = [
+            device.createBuffer({
+                label: "Cell State A",
+                size: this.cellStateArray.byteLength,
+                usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+            }),
+            device.createBuffer({
+                label: "Cell State B",
+                size: this.cellStateArray.byteLength,
+                usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+            })
+        ];
+        
+        for (let i = 0; i < this.cellStateArray.length; i += 3) {
+            this.cellStateArray[i] = 1;
+        }
+        device.queue.writeBuffer(this.cellStateStorage[0], 0, this.cellStateArray);
+        
+        for (let i = 0; i < this.cellStateArray.length; i++) {
+            this.cellStateArray[i] = i % 2;
+        }
+        device.queue.writeBuffer(this.cellStateStorage[1], 0, this.cellStateArray);
 
+        this.device.queue.writeBuffer(this.vertexBuffer, 0, this.vertices);
+        this.device.queue.writeBuffer(this.uniformBuffer, 0, this.uniformArray);
+
+        const vertexBufferLayout: GPUVertexBufferLayout = {
+            arrayStride: 8,
+            attributes: [{
+                format: "float32x2",
+                offset: 0,
+                shaderLocation: 0, // Position, see vertex shader
+            }],
+        };
+
+        this.cellPipeline = this.device.createRenderPipeline({
+            label: "Cell pipeline",
+            layout: "auto",
+            vertex: {
+                module: this.cellShaderModule,
+                entryPoint: "vertexMain",
+                buffers: [
+                    vertexBufferLayout
+                ]
+            },
+            fragment: {
+                module: this.cellShaderModule,
+                entryPoint: "fragmentMain",
+                targets: [{
+                    format: navigator.gpu.getPreferredCanvasFormat()
+                }]
+            }
+        });
+        
+        this.bindGroups = [
+            this.device.createBindGroup({
+                label: "Cell renderer bind group A",
+                layout: this.cellPipeline.getBindGroupLayout(0),
+                entries: [{
+                    binding: 0,
+                    resource: { buffer: this.uniformBuffer }
+                }, {
+                    binding: 1,
+                    resource: { buffer: this.cellStateStorage[0] }
+                }],
+            }),
+            this.device.createBindGroup({
+                label: "Cell renderer bind group B",
+                layout: this.cellPipeline.getBindGroupLayout(0),
+                entries: [{
+                    binding: 0,
+                    resource: { buffer: this.uniformBuffer }
+                }, {
+                    binding: 1,
+                    resource: { buffer: this.cellStateStorage[1] }
+                }],
+            })
+        ];
     }
     
     static async build(canvas: HTMLCanvasElement) {
@@ -73,48 +160,14 @@ export default class ReactionDiffusionModel {
         
         return new ReactionDiffusionModel(canvas, adapter, device, context)
     }
+
+    start() {
+        setInterval(this.render.bind(this), UPDATE_INTERVAL);
+    }
     
     render(clearColor: GPUColor = { r: 0, g: 0, b: 0.4, a: 1 }) {
-        
-        this.device.queue.writeBuffer(this.vertexBuffer, 0, this.vertices);
-        this.device.queue.writeBuffer(this.uniformBuffer, 0, this.uniformArray);
-        
-        const vertexBufferLayout: GPUVertexBufferLayout = {
-            arrayStride: 8,
-            attributes: [{
-                format: "float32x2",
-                offset: 0,
-                shaderLocation: 0, // Position, see vertex shader
-            }],
-        };
-        
-        const cellPipeline = this.device.createRenderPipeline({
-            label: "Cell pipeline",
-            layout: "auto",
-            vertex: {
-                module: this.cellShaderModule,
-                entryPoint: "vertexMain",
-                buffers: [
-                    vertexBufferLayout
-                ]
-            },
-            fragment: {
-                module: this.cellShaderModule,
-                entryPoint: "fragmentMain",
-                targets: [{
-                    format: navigator.gpu.getPreferredCanvasFormat()
-                }]
-            }
-        });
 
-        const bindGroup = this.device.createBindGroup({
-            label: "Cell renderer bind group",
-            layout: cellPipeline.getBindGroupLayout(0),
-            entries: [{
-              binding: 0,
-              resource: { buffer: this.uniformBuffer }
-            }],
-          });
+        this.step++;
 
         const encoder = this.device.createCommandEncoder();
         
@@ -126,14 +179,13 @@ export default class ReactionDiffusionModel {
                 storeOp: "store",
             }]
         });
-
-        pass.setPipeline(cellPipeline);
+        
+        pass.setPipeline(this.cellPipeline);
         pass.setVertexBuffer(0, this.vertexBuffer);
-        pass.setBindGroup(0, bindGroup); 
+        pass.setBindGroup(0, this.bindGroups[this.step % 2]); 
         pass.draw(this.vertices.length / 2, GRID_SIZE * GRID_SIZE); // 6 vertices
         
         pass.end();
-        
         this.device.queue.submit([encoder.finish()]);
     }
 }

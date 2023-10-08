@@ -10,7 +10,7 @@ onMounted(async () => {
   const canvas = document.querySelector('canvas') as HTMLCanvasElement
 
   const rdmodel = await ReactionDiffusionModel.build(canvas)
-  rdmodel.render()
+  rdmodel.start()
 })
 
 </script>
