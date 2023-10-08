@@ -80,15 +80,10 @@ export default class ReactionDiffusionModel {
             })
         ];
         
-        for (let i = 0; i < this.cellStateArray.length; i += 3) {
-            this.cellStateArray[i] = 1;
+        for (let i = 0; i < this.cellStateArray.length; i++) {
+            this.cellStateArray[i] = Math.random() > 0.6 ? 1 : 0;
         }
         device.queue.writeBuffer(this.cellStateStorage[0], 0, this.cellStateArray);
-        
-        for (let i = 0; i < this.cellStateArray.length; i++) {
-            this.cellStateArray[i] = i % 2;
-        }
-        device.queue.writeBuffer(this.cellStateStorage[1], 0, this.cellStateArray);
 
         this.device.queue.writeBuffer(this.vertexBuffer, 0, this.vertices);
         this.device.queue.writeBuffer(this.uniformBuffer, 0, this.uniformArray);
