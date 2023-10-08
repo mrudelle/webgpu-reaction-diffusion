@@ -1,7 +1,9 @@
 import shaderString from '../assets/shaders/cellShader.wgsl?raw'
+import simulationShaderString from '../assets/shaders/simulationShader.wgsl?raw'
 
 const GRID_SIZE = 32;
 const UPDATE_INTERVAL = 200; 
+const WORKGROUP_SIZE = 8;
 
 export default class ReactionDiffusionModel {
     
@@ -12,12 +14,14 @@ export default class ReactionDiffusionModel {
     
     vertexBuffer: GPUBuffer
     cellShaderModule: GPUShaderModule
+    simulationShaderModule: GPUShaderModule
     uniformArray: Float32Array
     uniformBuffer: GPUBuffer
     cellStateArray: Uint32Array
     cellStateStorage: GPUBuffer[]
 
     cellPipeline: GPURenderPipeline
+    simulationPipeline: GPUComputePipeline
     bindGroups: GPUBindGroup[]
 
     step = 0
@@ -48,6 +52,11 @@ export default class ReactionDiffusionModel {
         this.cellShaderModule = device.createShaderModule({
             label: "Cell shader",
             code: shaderString
+        });
+
+        this.simulationShaderModule = device.createShaderModule({
+            label: "Game of Life simulation shader",
+            code: simulationShaderString.replaceAll('WORKGROUP_SIZE', `${WORKGROUP_SIZE}`)
         });
         
         this.uniformArray = new Float32Array([GRID_SIZE, GRID_SIZE]);
@@ -93,9 +102,62 @@ export default class ReactionDiffusionModel {
             }],
         };
 
+        const bindGroupLayout = this.device.createBindGroupLayout({
+            label: "Cell Bind Group Layout",
+            entries: [{
+                binding: 0,
+                visibility: GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE,
+                buffer: {} // Grid uniform buffer
+            }, {
+                binding: 1,
+                visibility: GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE,
+                buffer: { type: "read-only-storage"} // Cell state input buffer
+            }, {
+                binding: 2,
+                visibility: GPUShaderStage.COMPUTE,
+                buffer: { type: "storage"} // Cell state output buffer
+            }]
+        });
+        
+        this.bindGroups = [
+            this.device.createBindGroup({
+                label: "Cell renderer bind group A",
+                layout: bindGroupLayout,
+                entries: [{
+                    binding: 0,
+                    resource: { buffer: this.uniformBuffer }
+                }, {
+                    binding: 1,
+                    resource: { buffer: this.cellStateStorage[0] }
+                }, {
+                    binding: 2,
+                    resource: { buffer: this.cellStateStorage[1] }
+                }],
+            }),
+            this.device.createBindGroup({
+                label: "Cell renderer bind group B",
+                layout: bindGroupLayout,
+                entries: [{
+                    binding: 0,
+                    resource: { buffer: this.uniformBuffer }
+                }, {
+                    binding: 1,
+                    resource: { buffer: this.cellStateStorage[1] }
+                }, {
+                    binding: 2,
+                    resource: { buffer: this.cellStateStorage[0] }
+                }],
+            })
+        ];
+
+        const pipelineLayout = device.createPipelineLayout({
+            label: "Cell Pipeline Layout",
+            bindGroupLayouts: [ bindGroupLayout ],
+        });
+
         this.cellPipeline = this.device.createRenderPipeline({
             label: "Cell pipeline",
-            layout: "auto",
+            layout: pipelineLayout,
             vertex: {
                 module: this.cellShaderModule,
                 entryPoint: "vertexMain",
@@ -111,31 +173,15 @@ export default class ReactionDiffusionModel {
                 }]
             }
         });
-        
-        this.bindGroups = [
-            this.device.createBindGroup({
-                label: "Cell renderer bind group A",
-                layout: this.cellPipeline.getBindGroupLayout(0),
-                entries: [{
-                    binding: 0,
-                    resource: { buffer: this.uniformBuffer }
-                }, {
-                    binding: 1,
-                    resource: { buffer: this.cellStateStorage[0] }
-                }],
-            }),
-            this.device.createBindGroup({
-                label: "Cell renderer bind group B",
-                layout: this.cellPipeline.getBindGroupLayout(0),
-                entries: [{
-                    binding: 0,
-                    resource: { buffer: this.uniformBuffer }
-                }, {
-                    binding: 1,
-                    resource: { buffer: this.cellStateStorage[1] }
-                }],
-            })
-        ];
+
+        this.simulationPipeline = device.createComputePipeline({
+            label: "Simulation pipeline",
+            layout: pipelineLayout,
+            compute: {
+              module: this.simulationShaderModule,
+              entryPoint: "computeMain",
+            }
+        });
     }
     
     static async build(canvas: HTMLCanvasElement) {
@@ -166,10 +212,18 @@ export default class ReactionDiffusionModel {
     }
     
     render(clearColor: GPUColor = { r: 0, g: 0, b: 0.4, a: 1 }) {
+        const encoder = this.device.createCommandEncoder();
+
+        const computePass = encoder.beginComputePass();
+
+        computePass.setPipeline(this.simulationPipeline);
+        computePass.setBindGroup(0, this.bindGroups[this.step % 2]);
+        const workgroupCount = Math.ceil(GRID_SIZE / WORKGROUP_SIZE);
+        computePass.dispatchWorkgroups(workgroupCount, workgroupCount);
+
+        computePass.end();
 
         this.step++;
-
-        const encoder = this.device.createCommandEncoder();
         
         const pass = encoder.beginRenderPass({
             colorAttachments: [{
@@ -186,6 +240,7 @@ export default class ReactionDiffusionModel {
         pass.draw(this.vertices.length / 2, GRID_SIZE * GRID_SIZE); // 6 vertices
         
         pass.end();
+
         this.device.queue.submit([encoder.finish()]);
     }
 }
