@@ -1,5 +1,7 @@
 import shaderString from '../assets/shaders/cellShader.wgsl?raw'
 
+const GRID_SIZE = 32;
+
 export default class ReactionDiffusionModel {
     
     canvas: HTMLCanvasElement
@@ -9,6 +11,8 @@ export default class ReactionDiffusionModel {
     
     vertexBuffer: GPUBuffer
     cellShaderModule: GPUShaderModule
+    uniformArray: Float32Array
+    uniformBuffer: GPUBuffer
     
     vertices = new Float32Array([
         //   X,    Y,
@@ -37,6 +41,14 @@ export default class ReactionDiffusionModel {
             label: "Cell shader",
             code: shaderString
         });
+
+        this.uniformArray = new Float32Array([GRID_SIZE, GRID_SIZE]);
+        this.uniformBuffer = device.createBuffer({
+            label: "Grid Uniforms",
+            size: this.uniformArray.byteLength,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
+
     }
     
     static async build(canvas: HTMLCanvasElement) {
@@ -65,6 +77,7 @@ export default class ReactionDiffusionModel {
     render(clearColor: GPUColor = { r: 0, g: 0, b: 0.4, a: 1 }) {
         
         this.device.queue.writeBuffer(this.vertexBuffer, 0, this.vertices);
+        this.device.queue.writeBuffer(this.uniformBuffer, 0, this.uniformArray);
         
         const vertexBufferLayout: GPUVertexBufferLayout = {
             arrayStride: 8,
@@ -94,6 +107,15 @@ export default class ReactionDiffusionModel {
             }
         });
 
+        const bindGroup = this.device.createBindGroup({
+            label: "Cell renderer bind group",
+            layout: cellPipeline.getBindGroupLayout(0),
+            entries: [{
+              binding: 0,
+              resource: { buffer: this.uniformBuffer }
+            }],
+          });
+
         const encoder = this.device.createCommandEncoder();
         
         const pass = encoder.beginRenderPass({
@@ -107,7 +129,8 @@ export default class ReactionDiffusionModel {
 
         pass.setPipeline(cellPipeline);
         pass.setVertexBuffer(0, this.vertexBuffer);
-        pass.draw(this.vertices.length / 2); // 6 vertices
+        pass.setBindGroup(0, bindGroup); 
+        pass.draw(this.vertices.length / 2, GRID_SIZE * GRID_SIZE); // 6 vertices
         
         pass.end();
         
