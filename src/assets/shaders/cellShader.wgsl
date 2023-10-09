@@ -1,24 +1,37 @@
 @group(0) @binding(0) var<uniform> grid: vec2f;
 @group(0) @binding(1) var<storage> cellState: array<u32>;
 
+
+struct VertexOutput {
+  @builtin(position) pos: vec4f,
+  @location(0) fragUV : vec2<f32>,
+};
+
+fn cellIndex(cell: vec2u) -> u32 {
+  return (cell.y % u32(grid.y)) * u32(grid.x) +
+         (cell.x % u32(grid.x));
+}
+
+fn cellActive(x: u32, y: u32) -> u32 {
+  return cellState[cellIndex(vec2(x, y))];
+}
+
+
 @vertex
 fn vertexMain(
-    @location(0) pos: vec2f,
-    @builtin(instance_index) instance: u32
-) -> @builtin(position) vec4f {
-
-    let i = f32(instance);
-
-    let cell = vec2f(i % grid.x, floor(i / grid.y)); // Cell(1,1) in the image above
-    let cellOffset = cell / grid * 2; // Compute the offset to cell
-
-    let state = f32(cellState[instance]);
-    let gridPos = (state * pos + 1) / grid - 1 + cellOffset;
-
-    return vec4f(gridPos, 0, 1);
+    @location(0) pos: vec2f
+) -> VertexOutput {
+    var output: VertexOutput;
+    output.pos = vec4f(pos, 0, 1);
+    output.fragUV = (pos.xy + 1) / 2;
+    return output;
 }
 
 @fragment
-fn fragmentMain() -> @location(0) vec4f {
-    return vec4f(.4, .7, .1, 1);
+fn fragmentMain(
+    input: VertexOutput
+) -> @location(0) vec4f {
+    let cell = input.fragUV * grid;
+    let ca = cellActive(u32(cell.x), u32(cell.y));
+    return vec4f(vec3f(input.fragUV, 1-input.fragUV.x) * f32(ca), 1);
 }

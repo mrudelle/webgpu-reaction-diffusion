@@ -1,8 +1,8 @@
 import shaderString from '../assets/shaders/cellShader.wgsl?raw'
 import simulationShaderString from '../assets/shaders/simulationShader.wgsl?raw'
 
-const GRID_SIZE = 32;
-const UPDATE_INTERVAL = 200; 
+const GRID_SIZE = 128;
+const UPDATE_INTERVAL = 20; 
 const WORKGROUP_SIZE = 8;
 
 export default class ReactionDiffusionModel {
@@ -28,13 +28,13 @@ export default class ReactionDiffusionModel {
     
     vertices = new Float32Array([
         //   X,    Y,
-        -0.8, -0.8, // Triangle 1 (Blue)
-        0.8, -0.8,
-        0.8,  0.8,
+        -1.0, -1.0, // Triangle 1 (Blue)
+        1.0, -1.0,
+        1.0,  1.0,
         
-        -0.8, -0.8, // Triangle 2 (Red)
-        0.8,  0.8,
-        -0.8,  0.8,
+        -1.0, -1.0, // Triangle 2 (Red)
+        1.0,  1.0,
+        -1.0,  1.0,
     ]);
     
     constructor(canvas: HTMLCanvasElement, adapter: GPUAdapter, device: GPUDevice, context: GPUCanvasContext) {
@@ -101,11 +101,11 @@ export default class ReactionDiffusionModel {
             label: "Cell Bind Group Layout",
             entries: [{
                 binding: 0,
-                visibility: GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE,
+                visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
                 buffer: {} // Grid uniform buffer
             }, {
                 binding: 1,
-                visibility: GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE,
+                visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
                 buffer: { type: "read-only-storage"} // Cell state input buffer
             }, {
                 binding: 2,
@@ -232,7 +232,7 @@ export default class ReactionDiffusionModel {
         pass.setPipeline(this.cellPipeline);
         pass.setVertexBuffer(0, this.vertexBuffer);
         pass.setBindGroup(0, this.bindGroups[this.step % 2]); 
-        pass.draw(this.vertices.length / 2, GRID_SIZE * GRID_SIZE); // 6 vertices
+        pass.draw(this.vertices.length / 2); // 6 vertices
         
         pass.end();
 
