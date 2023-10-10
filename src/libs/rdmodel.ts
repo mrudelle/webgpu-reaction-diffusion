@@ -2,7 +2,7 @@ import shaderString from '../assets/shaders/cellShader.wgsl?raw'
 import simulationShaderString from '../assets/shaders/simulationShader.wgsl?raw'
 
 const GRID_SIZE = 128;
-const UPDATE_INTERVAL = 20; 
+const UPDATE_INTERVAL = 200; 
 const WORKGROUP_SIZE = 8;
 
 export default class ReactionDiffusionModel {
@@ -17,8 +17,8 @@ export default class ReactionDiffusionModel {
     simulationShaderModule: GPUShaderModule
     uniformArray: Float32Array
     uniformBuffer: GPUBuffer
-    cellStateArray: Uint32Array
-    cellStateStorage: GPUBuffer[]
+    chemicalUStorage: GPUBuffer[]
+    chemicalVStorage: GPUBuffer[]
 
     cellPipeline: GPURenderPipeline
     simulationPipeline: GPUComputePipeline
@@ -65,25 +65,34 @@ export default class ReactionDiffusionModel {
             size: this.uniformArray.byteLength,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
+
+        const chemicalBuffers = (chemicalName: string) => {
+            const initialBufferValues = new Float32Array(GRID_SIZE * GRID_SIZE);
+
+            const chemicalStorage = [
+                device.createBuffer({
+                    label: `Chemical ${chemicalName} State A`,
+                    size: initialBufferValues.byteLength,
+                    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+                }),
+                device.createBuffer({
+                    label: `Chemical ${chemicalName} State B`,
+                    size: initialBufferValues.byteLength,
+                    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+                })
+            ];
         
-        this.cellStateArray = new Uint32Array(GRID_SIZE * GRID_SIZE);
-        this.cellStateStorage = [
-            device.createBuffer({
-                label: "Cell State A",
-                size: this.cellStateArray.byteLength,
-                usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-            }),
-            device.createBuffer({
-                label: "Cell State B",
-                size: this.cellStateArray.byteLength,
-                usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-            })
-        ];
-        
-        for (let i = 0; i < this.cellStateArray.length; i++) {
-            this.cellStateArray[i] = Math.random() > 0.6 ? 1 : 0;
+            for (let i = 0; i < initialBufferValues.length; i++) {
+                initialBufferValues[i] = Math.random();
+            }
+
+            device.queue.writeBuffer(chemicalStorage[0], 0, initialBufferValues);
+
+            return chemicalStorage
         }
-        device.queue.writeBuffer(this.cellStateStorage[0], 0, this.cellStateArray);
+
+        this.chemicalUStorage = chemicalBuffers('u')
+        this.chemicalVStorage = chemicalBuffers('v')
 
         this.device.queue.writeBuffer(this.vertexBuffer, 0, this.vertices);
         this.device.queue.writeBuffer(this.uniformBuffer, 0, this.uniformArray);
@@ -106,11 +115,19 @@ export default class ReactionDiffusionModel {
             }, {
                 binding: 1,
                 visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
-                buffer: { type: "read-only-storage"} // Cell state input buffer
+                buffer: { type: "read-only-storage"} // Chemical u state input buffer
             }, {
                 binding: 2,
                 visibility: GPUShaderStage.COMPUTE,
-                buffer: { type: "storage"} // Cell state output buffer
+                buffer: { type: "storage"} // Chemical u state output buffer
+            }, {
+                binding: 3,
+                visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
+                buffer: { type: "read-only-storage"} // Chemical v state input buffer
+            }, {
+                binding: 4,
+                visibility: GPUShaderStage.COMPUTE,
+                buffer: { type: "storage"} // Chemical v state output buffer
             }]
         });
         
@@ -123,10 +140,16 @@ export default class ReactionDiffusionModel {
                     resource: { buffer: this.uniformBuffer }
                 }, {
                     binding: 1,
-                    resource: { buffer: this.cellStateStorage[0] }
+                    resource: { buffer: this.chemicalUStorage[0] }
                 }, {
                     binding: 2,
-                    resource: { buffer: this.cellStateStorage[1] }
+                    resource: { buffer: this.chemicalUStorage[1] }
+                }, {
+                    binding: 3,
+                    resource: { buffer: this.chemicalVStorage[0] }
+                }, {
+                    binding: 4,
+                    resource: { buffer: this.chemicalVStorage[1] }
                 }],
             }),
             this.device.createBindGroup({
@@ -137,10 +160,16 @@ export default class ReactionDiffusionModel {
                     resource: { buffer: this.uniformBuffer }
                 }, {
                     binding: 1,
-                    resource: { buffer: this.cellStateStorage[1] }
+                    resource: { buffer: this.chemicalUStorage[1] }
                 }, {
                     binding: 2,
-                    resource: { buffer: this.cellStateStorage[0] }
+                    resource: { buffer: this.chemicalUStorage[0] }
+                }, {
+                    binding: 3,
+                    resource: { buffer: this.chemicalVStorage[1] }
+                }, {
+                    binding: 4,
+                    resource: { buffer: this.chemicalVStorage[0] }
                 }],
             })
         ];

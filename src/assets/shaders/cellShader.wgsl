@@ -1,5 +1,6 @@
 @group(0) @binding(0) var<uniform> grid: vec2f;
-@group(0) @binding(1) var<storage> cellState: array<u32>;
+@group(0) @binding(1) var<storage> chemUState: array<f32>;
+@group(0) @binding(3) var<storage> chemVState: array<f32>;
 
 
 struct VertexOutput {
@@ -12,8 +13,8 @@ fn cellIndex(cell: vec2u) -> u32 {
          (cell.x % u32(grid.x));
 }
 
-fn cellActive(x: u32, y: u32) -> u32 {
-  return cellState[cellIndex(vec2(x, y))];
+fn cellActive(x: u32, y: u32) -> f32 {
+  return chemUState[cellIndex(vec2(x, y))];
 }
 
 
@@ -33,5 +34,5 @@ fn fragmentMain(
 ) -> @location(0) vec4f {
     let cell = input.fragUV * grid;
     let ca = cellActive(u32(cell.x), u32(cell.y));
-    return vec4f(vec3f(input.fragUV, 1-input.fragUV.x) * f32(ca), 1);
+    return vec4f(vec3f(input.fragUV, 1-input.fragUV.x) * ca, 1);
 }

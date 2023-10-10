@@ -1,15 +1,17 @@
 @group(0) @binding(0) var<uniform> grid: vec2f;
 
-@group(0) @binding(1) var<storage> cellStateIn: array<u32>;
-@group(0) @binding(2) var<storage, read_write> cellStateOut: array<u32>;
+@group(0) @binding(1) var<storage> chemUIn: array<f32>;
+@group(0) @binding(2) var<storage, read_write> chemUOut: array<f32>;
+@group(0) @binding(3) var<storage> chemVIn: array<f32>;
+@group(0) @binding(4) var<storage, read_write> chemVOut: array<f32>;
 
 fn cellIndex(cell: vec2u) -> u32 {
   return (cell.y % u32(grid.y)) * u32(grid.x) +
          (cell.x % u32(grid.x));
 }
 
-fn cellActive(x: u32, y: u32) -> u32 {
-  return cellStateIn[cellIndex(vec2(x, y))];
+fn cellActive(x: u32, y: u32) -> f32 {
+  return chemUIn[cellIndex(vec2(x, y))];
 }
 
 @compute
@@ -27,16 +29,15 @@ fn computeMain(@builtin(global_invocation_id) cell: vec3u) {
     let i = cellIndex(cell.xy);
 
     // Conway's game of life rules:
-    switch activeNeighbors {
-        case 2: { // Active cells with 2 neighbors stay active.
-            cellStateOut[i] = cellStateIn[i];
-        }
-        case 3: { // Cells with 3 neighbors become or stay active.
-            cellStateOut[i] = 1;
-        }
-        default: { // Cells with < 2 or > 3 neighbors become inactive.
-            cellStateOut[i] = 0;
-        }
-    }    
+    if (abs(activeNeighbors - 3) < 0.1) {
+        // Cells with 3 neighbors become or stay active.
+        chemUOut[i] = 1;
+    } else if (abs(activeNeighbors - 2) < 0.1) {
+        // Active cells with 2 neighbors stay active.
+        chemUOut[i] = chemUIn[i];
+    } else {
+        // Cells with < 2 or > 3 neighbors become inactive.
+        chemUOut[i] = 0;
+    }
 
 }
