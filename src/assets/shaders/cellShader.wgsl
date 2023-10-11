@@ -14,7 +14,7 @@ fn cellIndex(cell: vec2u) -> u32 {
 }
 
 fn cellActive(x: u32, y: u32) -> f32 {
-  return chemUState[cellIndex(vec2(x, y))];
+  return chemVState[cellIndex(vec2(x, y))];
 }
 
 

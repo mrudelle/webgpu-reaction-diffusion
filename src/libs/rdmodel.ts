@@ -2,7 +2,7 @@ import shaderString from '../assets/shaders/cellShader.wgsl?raw'
 import simulationShaderString from '../assets/shaders/simulationShader.wgsl?raw'
 
 const GRID_SIZE = 128;
-const UPDATE_INTERVAL = 200; 
+const UPDATE_INTERVAL = 50; 
 const WORKGROUP_SIZE = 8;
 
 export default class ReactionDiffusionModel {
@@ -66,7 +66,7 @@ export default class ReactionDiffusionModel {
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
 
-        const chemicalBuffers = (chemicalName: string) => {
+        const chemicalBuffers = (chemicalName: string, initialFeed: number) => {
             const initialBufferValues = new Float32Array(GRID_SIZE * GRID_SIZE);
 
             const chemicalStorage = [
@@ -83,7 +83,7 @@ export default class ReactionDiffusionModel {
             ];
         
             for (let i = 0; i < initialBufferValues.length; i++) {
-                initialBufferValues[i] = Math.random();
+                initialBufferValues[i] = Math.random() * initialFeed;
             }
 
             device.queue.writeBuffer(chemicalStorage[0], 0, initialBufferValues);
@@ -91,8 +91,8 @@ export default class ReactionDiffusionModel {
             return chemicalStorage
         }
 
-        this.chemicalUStorage = chemicalBuffers('u')
-        this.chemicalVStorage = chemicalBuffers('v')
+        this.chemicalUStorage = chemicalBuffers('u', 1)
+        this.chemicalVStorage = chemicalBuffers('v', .2)
 
         this.device.queue.writeBuffer(this.vertexBuffer, 0, this.vertices);
         this.device.queue.writeBuffer(this.uniformBuffer, 0, this.uniformArray);
