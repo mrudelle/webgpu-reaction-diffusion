@@ -23,8 +23,6 @@ export default class ReactionDiffusionModel {
     vertexBuffer: GPUBuffer
     cellShaderModule: GPUShaderModule
     simulationShaderModule: GPUShaderModule
-    uniformGridArray: Float32Array
-    uniformGridBuffer: GPUBuffer
     uniformBuffer: GPUBuffer
     chemicalUStorage: GPUBuffer[]
     chemicalVStorage: GPUBuffer[]
@@ -77,16 +75,10 @@ export default class ReactionDiffusionModel {
             label: "Game of Life simulation shader",
             code: simulationShaderString.replaceAll('WORKGROUP_SIZE', `${WORKGROUP_SIZE}`)
         });
-        
-        this.uniformGridArray = new Float32Array([GRID_SIZE, GRID_SIZE]);
-        this.uniformGridBuffer = device.createBuffer({
-            label: "Grid Uniforms",
-            size: this.uniformGridArray.byteLength,
-            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-        });
 
+        console.log(this.packUniforms())
         this.uniformBuffer = device.createBuffer({
-            label: "Grid Uniforms",
+            label: "Uniforms",
             size: this.packUniforms().byteLength,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
@@ -121,7 +113,6 @@ export default class ReactionDiffusionModel {
         this.chemicalVStorage = chemicalBuffers('v', .2)
 
         this.device.queue.writeBuffer(this.vertexBuffer, 0, this.vertices);
-        this.device.queue.writeBuffer(this.uniformGridBuffer, 0, this.uniformGridArray);
         this.device.queue.writeBuffer(this.uniformBuffer, 0, this.packUniforms());
 
         const vertexBufferLayout: GPUVertexBufferLayout = {
@@ -138,7 +129,7 @@ export default class ReactionDiffusionModel {
             entries: [{
                 binding: 0,
                 visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
-                buffer: {} // Grid uniform buffer
+                buffer: {} // Uniform buffer
             }, {
                 binding: 1,
                 visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
@@ -155,10 +146,6 @@ export default class ReactionDiffusionModel {
                 binding: 4,
                 visibility: GPUShaderStage.COMPUTE,
                 buffer: { type: "storage"} // Chemical v state output buffer
-            }, {
-                binding: 5,
-                visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
-                buffer: {} // uniform buffer
             },]
         });
         
@@ -168,7 +155,7 @@ export default class ReactionDiffusionModel {
                 layout: bindGroupLayout,
                 entries: [{
                     binding: 0,
-                    resource: { buffer: this.uniformGridBuffer }
+                    resource: { buffer: this.uniformBuffer }
                 }, {
                     binding: 1,
                     resource: { buffer: this.chemicalUStorage[0] }
@@ -181,9 +168,6 @@ export default class ReactionDiffusionModel {
                 }, {
                     binding: 4,
                     resource: { buffer: this.chemicalVStorage[1] }
-                }, {
-                    binding: 5,
-                    resource: { buffer: this.uniformBuffer }
                 }],
             }),
             this.device.createBindGroup({
@@ -191,7 +175,7 @@ export default class ReactionDiffusionModel {
                 layout: bindGroupLayout,
                 entries: [{
                     binding: 0,
-                    resource: { buffer: this.uniformGridBuffer }
+                    resource: { buffer: this.uniformBuffer }
                 }, {
                     binding: 1,
                     resource: { buffer: this.chemicalUStorage[1] }
@@ -204,9 +188,6 @@ export default class ReactionDiffusionModel {
                 }, {
                     binding: 4,
                     resource: { buffer: this.chemicalVStorage[0] }
-                }, {
-                    binding: 5,
-                    resource: { buffer: this.uniformBuffer }
                 }],
             })
         ];
@@ -252,6 +233,8 @@ export default class ReactionDiffusionModel {
             this.uniforms.diffuseRateV,
             this.uniforms.feedRate,
             this.uniforms.killRate,
+            0, // vec2f needs to be padded at the 64 bits mark
+            ...[GRID_SIZE, GRID_SIZE],
         ])
     }
     

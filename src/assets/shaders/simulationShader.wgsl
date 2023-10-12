@@ -1,9 +1,3 @@
-@group(0) @binding(0) var<uniform> grid: vec2f;
-
-@group(0) @binding(1) var<storage> chemUIn: array<f32>;
-@group(0) @binding(2) var<storage, read_write> chemUOut: array<f32>;
-@group(0) @binding(3) var<storage> chemVIn: array<f32>;
-@group(0) @binding(4) var<storage, read_write> chemVOut: array<f32>;
 
 struct Uniforms {
     delta_time: f32,
@@ -11,13 +5,20 @@ struct Uniforms {
     diffuse_rate_v: f32,
     feed_rate: f32,
     kill_rate: f32,
+    grid: vec2<f32>,
 }
 
-@group(0) @binding(5) var<uniform> params: Uniforms;
+@group(0) @binding(0) var<uniform> params: Uniforms;
+
+@group(0) @binding(1) var<storage> chemUIn: array<f32>;
+@group(0) @binding(2) var<storage, read_write> chemUOut: array<f32>;
+@group(0) @binding(3) var<storage> chemVIn: array<f32>;
+@group(0) @binding(4) var<storage, read_write> chemVOut: array<f32>;
+
 
 fn cellIndex(cell: vec2u) -> u32 {
-    return (cell.y % u32(grid.y)) * u32(grid.x) +
-           (cell.x % u32(grid.x));
+    return (cell.y % u32(params.grid.y)) * u32(params.grid.x) +
+           (cell.x % u32(params.grid.x));
 }
 
 fn laplaceU(cell: vec2u) -> f32 {
