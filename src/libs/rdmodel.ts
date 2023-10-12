@@ -5,6 +5,14 @@ const GRID_SIZE = 128;
 const UPDATE_INTERVAL = 50; 
 const WORKGROUP_SIZE = 8;
 
+interface Uniforms {
+    deltaTime: number
+    diffuseRateU: number
+    diffuseRateV: number
+    feedRate: number
+    killRate: number
+}
+
 export default class ReactionDiffusionModel {
     
     canvas: HTMLCanvasElement
@@ -15,7 +23,8 @@ export default class ReactionDiffusionModel {
     vertexBuffer: GPUBuffer
     cellShaderModule: GPUShaderModule
     simulationShaderModule: GPUShaderModule
-    uniformArray: Float32Array
+    uniformGridArray: Float32Array
+    uniformGridBuffer: GPUBuffer
     uniformBuffer: GPUBuffer
     chemicalUStorage: GPUBuffer[]
     chemicalVStorage: GPUBuffer[]
@@ -23,6 +32,8 @@ export default class ReactionDiffusionModel {
     cellPipeline: GPURenderPipeline
     simulationPipeline: GPUComputePipeline
     bindGroups: GPUBindGroup[]
+
+    uniforms: Uniforms
 
     step = 0
     
@@ -42,6 +53,14 @@ export default class ReactionDiffusionModel {
         this.adapter = adapter
         this.device = device
         this.context = context
+
+        this.uniforms = {
+            deltaTime: 0.3,
+            diffuseRateU: 1.0,
+            diffuseRateV: 0.2,
+            feedRate: 0.07,
+            killRate: 0.02,
+        }
         
         this.vertexBuffer = device.createBuffer({
             label: "Cell vertices",
@@ -59,12 +78,19 @@ export default class ReactionDiffusionModel {
             code: simulationShaderString.replaceAll('WORKGROUP_SIZE', `${WORKGROUP_SIZE}`)
         });
         
-        this.uniformArray = new Float32Array([GRID_SIZE, GRID_SIZE]);
-        this.uniformBuffer = device.createBuffer({
+        this.uniformGridArray = new Float32Array([GRID_SIZE, GRID_SIZE]);
+        this.uniformGridBuffer = device.createBuffer({
             label: "Grid Uniforms",
-            size: this.uniformArray.byteLength,
+            size: this.uniformGridArray.byteLength,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
+
+        this.uniformBuffer = device.createBuffer({
+            label: "Grid Uniforms",
+            size: this.packUniforms().byteLength,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
+
 
         const chemicalBuffers = (chemicalName: string, initialFeed: number) => {
             const initialBufferValues = new Float32Array(GRID_SIZE * GRID_SIZE);
@@ -95,7 +121,8 @@ export default class ReactionDiffusionModel {
         this.chemicalVStorage = chemicalBuffers('v', .2)
 
         this.device.queue.writeBuffer(this.vertexBuffer, 0, this.vertices);
-        this.device.queue.writeBuffer(this.uniformBuffer, 0, this.uniformArray);
+        this.device.queue.writeBuffer(this.uniformGridBuffer, 0, this.uniformGridArray);
+        this.device.queue.writeBuffer(this.uniformBuffer, 0, this.packUniforms());
 
         const vertexBufferLayout: GPUVertexBufferLayout = {
             arrayStride: 8,
@@ -128,7 +155,11 @@ export default class ReactionDiffusionModel {
                 binding: 4,
                 visibility: GPUShaderStage.COMPUTE,
                 buffer: { type: "storage"} // Chemical v state output buffer
-            }]
+            }, {
+                binding: 5,
+                visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
+                buffer: {} // uniform buffer
+            },]
         });
         
         this.bindGroups = [
@@ -137,7 +168,7 @@ export default class ReactionDiffusionModel {
                 layout: bindGroupLayout,
                 entries: [{
                     binding: 0,
-                    resource: { buffer: this.uniformBuffer }
+                    resource: { buffer: this.uniformGridBuffer }
                 }, {
                     binding: 1,
                     resource: { buffer: this.chemicalUStorage[0] }
@@ -150,6 +181,9 @@ export default class ReactionDiffusionModel {
                 }, {
                     binding: 4,
                     resource: { buffer: this.chemicalVStorage[1] }
+                }, {
+                    binding: 5,
+                    resource: { buffer: this.uniformBuffer }
                 }],
             }),
             this.device.createBindGroup({
@@ -157,7 +191,7 @@ export default class ReactionDiffusionModel {
                 layout: bindGroupLayout,
                 entries: [{
                     binding: 0,
-                    resource: { buffer: this.uniformBuffer }
+                    resource: { buffer: this.uniformGridBuffer }
                 }, {
                     binding: 1,
                     resource: { buffer: this.chemicalUStorage[1] }
@@ -170,6 +204,9 @@ export default class ReactionDiffusionModel {
                 }, {
                     binding: 4,
                     resource: { buffer: this.chemicalVStorage[0] }
+                }, {
+                    binding: 5,
+                    resource: { buffer: this.uniformBuffer }
                 }],
             })
         ];
@@ -206,6 +243,16 @@ export default class ReactionDiffusionModel {
               entryPoint: "computeMain",
             }
         });
+    }
+
+    packUniforms() {
+        return new Float32Array([
+            this.uniforms.deltaTime,
+            this.uniforms.diffuseRateU,
+            this.uniforms.diffuseRateV,
+            this.uniforms.feedRate,
+            this.uniforms.killRate,
+        ])
     }
     
     static async build(canvas: HTMLCanvasElement) {

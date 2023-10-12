@@ -5,6 +5,16 @@
 @group(0) @binding(3) var<storage> chemVIn: array<f32>;
 @group(0) @binding(4) var<storage, read_write> chemVOut: array<f32>;
 
+struct Uniforms {
+    delta_time: f32,
+    diffuse_rate_u: f32,
+    diffuse_rate_v: f32,
+    feed_rate: f32,
+    kill_rate: f32,
+}
+
+@group(0) @binding(5) var<uniform> params: Uniforms;
+
 fn cellIndex(cell: vec2u) -> u32 {
     return (cell.y % u32(grid.y)) * u32(grid.x) +
            (cell.x % u32(grid.x));
@@ -39,11 +49,11 @@ fn laplaceV(cell: vec2u) -> f32 {
 @compute
 @workgroup_size(WORKGROUP_SIZE, WORKGROUP_SIZE)
 fn computeMain(@builtin(global_invocation_id) cell: vec3u) {
-    let dt = 0.05;
-    let ru = 1.0;
-    let rv = 0.2;
-    let f = 0.05;
-    let k = 0.02;
+    let dt = params.delta_time;
+    let ru = params.diffuse_rate_u;
+    let rv = params.diffuse_rate_v;
+    let f = params.feed_rate;
+    let k = params.kill_rate;
 
     let i = cellIndex(cell.xy);
 
