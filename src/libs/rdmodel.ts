@@ -81,8 +81,6 @@ export default class ReactionDiffusionModel {
             label: "Game of Life simulation shader",
             code: simulationShaderString.replaceAll('WORKGROUP_SIZE', `${WORKGROUP_SIZE}`)
         });
-
-        console.log(this.packUniforms())
         this.uniformBuffer = device.createBuffer({
             label: "Uniforms",
             size: this.packUniforms().byteLength,
@@ -273,7 +271,6 @@ export default class ReactionDiffusionModel {
     }
 
     nextFrame(renderMs: number) {
-        console.log(renderMs)
         this.render(Math.min(MAX_UPDATE_MS, renderMs - this.lastRenderMs));
         this.lastRenderMs = renderMs
         this.nextAnimationFrame = requestAnimationFrame(this.nextFrame.bind(this));
@@ -285,7 +282,6 @@ export default class ReactionDiffusionModel {
     
     render(deltaTimeMs: number, clearColor: GPUColor = { r: 0, g: 0, b: 0.4, a: 1 }) {
         this.uniforms.deltaTime = deltaTimeMs / 1000 * this.speed;
-        console.log(deltaTimeMs);
 
         this.device.queue.writeBuffer(this.uniformBuffer, 0, this.packUniforms());
 

@@ -23,8 +23,14 @@ a:hover {
   color: #535bf2;
 }
 
-body {
+#app, body {
   margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden, hidden;
+}
+
+#canvas-holder {
   display: flex;
   place-items: center;
   min-width: 320px;
@@ -57,13 +63,6 @@ button:focus-visible {
 
 .card {
   padding: 2em;
-}
-
-#app {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
 }
 
 @media (prefers-color-scheme: light) {

@@ -9,9 +9,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tweakpane/plugin-essentials": "^0.2.0",
+    "tweakpane": "^4.0.1",
     "vue": "^3.3.4"
   },
   "devDependencies": {
+    "@tweakpane/core": "^2.0.1",
     "@vitejs/plugin-vue": "^4.2.3",
     "@webgpu/types": "^0.1.37",
     "typescript": "^5.0.2",
