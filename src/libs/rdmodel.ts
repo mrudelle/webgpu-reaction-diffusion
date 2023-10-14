@@ -2,8 +2,8 @@ import shaderString from '../assets/shaders/cellShader.wgsl?raw'
 import simulationShaderString from '../assets/shaders/simulationShader.wgsl?raw'
 
 const GRID_SIZE = 128;
-const UPDATE_INTERVAL = 50; 
 const WORKGROUP_SIZE = 8;
+const MAX_UPDATE_MS = 100;
 
 interface Uniforms {
     deltaTime: number
@@ -45,6 +45,10 @@ export default class ReactionDiffusionModel {
         1.0,  1.0,
         -1.0,  1.0,
     ]);
+    nextAnimationFrame: number = 0;
+    lastRenderMs: number = 0;
+
+    speed = 30
     
     constructor(canvas: HTMLCanvasElement, adapter: GPUAdapter, device: GPUDevice, context: GPUCanvasContext) {
         this.canvas = canvas
@@ -59,6 +63,8 @@ export default class ReactionDiffusionModel {
             feedRate: 0.07,
             killRate: 0.02,
         }
+
+        this.lastRenderMs = performance.now()
         
         this.vertexBuffer = device.createBuffer({
             label: "Cell vertices",
@@ -262,10 +268,27 @@ export default class ReactionDiffusionModel {
     }
 
     start() {
-        setInterval(this.render.bind(this), UPDATE_INTERVAL);
+        this.lastRenderMs = performance.now() - MAX_UPDATE_MS / 2
+        this.nextFrame(performance.now());
+    }
+
+    nextFrame(renderMs: number) {
+        console.log(renderMs)
+        this.render(Math.min(MAX_UPDATE_MS, renderMs - this.lastRenderMs));
+        this.lastRenderMs = renderMs
+        this.nextAnimationFrame = requestAnimationFrame(this.nextFrame.bind(this));
+    }
+
+    stop() {
+        cancelAnimationFrame(this.nextAnimationFrame)
     }
     
-    render(clearColor: GPUColor = { r: 0, g: 0, b: 0.4, a: 1 }) {
+    render(deltaTimeMs: number, clearColor: GPUColor = { r: 0, g: 0, b: 0.4, a: 1 }) {
+        this.uniforms.deltaTime = deltaTimeMs / 1000 * this.speed;
+        console.log(deltaTimeMs);
+
+        this.device.queue.writeBuffer(this.uniformBuffer, 0, this.packUniforms());
+
         const encoder = this.device.createCommandEncoder();
 
         const computePass = encoder.beginComputePass();
