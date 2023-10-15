@@ -7,10 +7,10 @@ const tweakpaneContainer = ref<HTMLElement>()
 
 const PARAMS = reactive({
   speed: 20,
-  diffuseRateU: 0.88,
-  diffuseRateV: 0.30,
-  feedRate: 0.14,
-  killRate: 0.06,
+  diffuseRateU: 1.0,
+  diffuseRateV: 0.5,
+  feedRate: 0.055,
+  killRate: 0.062,
 })
 
 const RATE_SETTING = {
@@ -28,11 +28,19 @@ onMounted(async () => {
     title: 'WebGPU Reaction Diffusion'
   })
 
-  pane.addBinding(PARAMS, 'speed');
+  pane.addBinding(PARAMS, 'speed', {min: 0});
   pane.addBinding(PARAMS, 'diffuseRateU', RATE_SETTING);
   pane.addBinding(PARAMS, 'diffuseRateV', RATE_SETTING);
-  pane.addBinding(PARAMS, 'feedRate', RATE_SETTING);
-  pane.addBinding(PARAMS, 'killRate', RATE_SETTING);
+  pane.addBinding(PARAMS, 'feedRate', {min: .01, max: .1});
+  pane.addBinding(PARAMS, 'killRate', {min: .045, max: .07});
+
+  const reset = pane.addButton({
+    title: 'Reset',
+    label: 'Reset chemicals',   // optional
+  });
+  reset.on('click', () => {
+    rdmodel.resetChemicals();
+  });
 
   watch(PARAMS, (newSettings) => {
     const input = toRaw(newSettings)

@@ -2,7 +2,7 @@ import { createNoise2D } from 'simplex-noise';
 import shaderString from '../assets/shaders/cellShader.wgsl?raw'
 import simulationShaderString from '../assets/shaders/simulationShader.wgsl?raw'
 
-const GRID_SIZE = 128;
+const GRID_SIZE = 512;
 const WORKGROUP_SIZE = 8;
 const MAX_UPDATE_MS = 100;
 
@@ -241,20 +241,40 @@ export default class ReactionDiffusionModel {
 
     resetChemicals() {
 
+        const U_START_RATIO = 1
+        const V_START_RATIO = 1
+        const NOISE_SCALE = 2^16
+
+        const noise2D = createNoise2D();
+        const noiseFn = (x: number, y: number) => 
+            noise2D(x / NOISE_SCALE, y / NOISE_SCALE) / 2 + .5
+
+        const stats = (temp1: Float32Array) => {
+            const avg = temp1.reduce((a, b) => a + b, 0) / temp1.length;
+            const min = temp1.reduce((a, b) => Math.min(a,b), 0);
+            const max = temp1.reduce((a, b) => Math.max(a,b), 0);
+            console.log(`Avg: ${avg}, [${min}, ${max}]`)
+        }
+        
+        const gridIndex = (i: number): [number, number] => [
+            i % GRID_SIZE,
+            Math.floor(i / GRID_SIZE),
+        ]
+        
         const initialBufferValues = new Float32Array(GRID_SIZE * GRID_SIZE);
 
-        const U_START_RATIO = 1
-        const V_START_RATIO = .2
 
         for (let i = 0; i < initialBufferValues.length; i++) {
-            initialBufferValues[i] = Math.random() * U_START_RATIO;
+            initialBufferValues[i] = noiseFn(...gridIndex(i)) * U_START_RATIO;
         }
+        stats(initialBufferValues)
 
         this.device.queue.writeBuffer(this.chemicalUStorage[0], 0, initialBufferValues);
 
         for (let i = 0; i < initialBufferValues.length; i++) {
-            initialBufferValues[i] = Math.random() * V_START_RATIO;
+            initialBufferValues[i] = noiseFn(...gridIndex(i)) * V_START_RATIO;
         }
+        stats(initialBufferValues)
 
         this.device.queue.writeBuffer(this.chemicalVStorage[0], 0, initialBufferValues);
 
