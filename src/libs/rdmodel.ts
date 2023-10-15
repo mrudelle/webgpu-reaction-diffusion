@@ -1,3 +1,4 @@
+import { createNoise2D } from 'simplex-noise';
 import shaderString from '../assets/shaders/cellShader.wgsl?raw'
 import simulationShaderString from '../assets/shaders/simulationShader.wgsl?raw'
 
@@ -103,18 +104,14 @@ export default class ReactionDiffusionModel {
                     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
                 })
             ];
-        
-            for (let i = 0; i < initialBufferValues.length; i++) {
-                initialBufferValues[i] = Math.random() * initialFeed;
-            }
-
-            device.queue.writeBuffer(chemicalStorage[0], 0, initialBufferValues);
 
             return chemicalStorage
         }
 
         this.chemicalUStorage = chemicalBuffers('u', 1)
         this.chemicalVStorage = chemicalBuffers('v', .2)
+
+        this.resetChemicals()
 
         this.device.queue.writeBuffer(this.vertexBuffer, 0, this.vertices);
         this.device.queue.writeBuffer(this.uniformBuffer, 0, this.packUniforms());
@@ -241,7 +238,29 @@ export default class ReactionDiffusionModel {
             ...[GRID_SIZE, GRID_SIZE],
         ])
     }
-    
+
+    resetChemicals() {
+
+        const initialBufferValues = new Float32Array(GRID_SIZE * GRID_SIZE);
+
+        const U_START_RATIO = 1
+        const V_START_RATIO = .2
+
+        for (let i = 0; i < initialBufferValues.length; i++) {
+            initialBufferValues[i] = Math.random() * U_START_RATIO;
+        }
+
+        this.device.queue.writeBuffer(this.chemicalUStorage[0], 0, initialBufferValues);
+
+        for (let i = 0; i < initialBufferValues.length; i++) {
+            initialBufferValues[i] = Math.random() * V_START_RATIO;
+        }
+
+        this.device.queue.writeBuffer(this.chemicalVStorage[0], 0, initialBufferValues);
+
+        this.step += this.step % 2
+    }
+     
     static async build(canvas: HTMLCanvasElement) {
         if (!navigator.gpu) {
             throw new Error('Your browser does not support WebGPU yet. Try Chrome on Mac or Windows. Or on Linux with a flag.')
