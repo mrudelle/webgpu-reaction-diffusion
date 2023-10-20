@@ -31,7 +31,7 @@ onMounted(async () => {
   pane.addBinding(PARAMS, 'speed', {min: 0});
   pane.addBinding(PARAMS, 'diffuseRateU', RATE_SETTING);
   pane.addBinding(PARAMS, 'diffuseRateV', RATE_SETTING);
-  pane.addBinding(PARAMS, 'feedRate', {min: .01, max: .1});
+  pane.addBinding(PARAMS, 'feedRate', {min: .002, max: .12});
   pane.addBinding(PARAMS, 'killRate', {min: .045, max: .07});
 
   const reset = pane.addButton({
