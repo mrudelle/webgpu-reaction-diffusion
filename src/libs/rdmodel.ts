@@ -5,6 +5,7 @@ import simulationShaderString from '../assets/shaders/simulationShader.wgsl?raw'
 const GRID_SIZE = 512;
 const WORKGROUP_SIZE = 8;
 const MAX_UPDATE_MS = 100;
+const START_CUBE = 15;
 
 interface Uniforms {
     deltaTime: number
@@ -265,14 +266,21 @@ export default class ReactionDiffusionModel {
 
 
         for (let i = 0; i < initialBufferValues.length; i++) {
-            initialBufferValues[i] = noiseFn(...gridIndex(i)) * U_START_RATIO;
+            //initialBufferValues[i] = noiseFn(...gridIndex(i)) * U_START_RATIO;
+            initialBufferValues[i] = 1.0;
         }
         stats(initialBufferValues)
 
         this.device.queue.writeBuffer(this.chemicalUStorage[0], 0, initialBufferValues);
 
         for (let i = 0; i < initialBufferValues.length; i++) {
-            initialBufferValues[i] = noiseFn(...gridIndex(i)) * V_START_RATIO;
+            initialBufferValues[i] = 0.0; // noiseFn(...gridIndex(i)) * V_START_RATIO;
+        }
+        const cube_start = Math.floor((GRID_SIZE - START_CUBE) / 2)
+        for (let x = cube_start; x < cube_start + START_CUBE; x++) {
+            for (let y = cube_start; y < cube_start + START_CUBE; y++) {
+                initialBufferValues[y * GRID_SIZE + x] = 1.0
+            }
         }
         stats(initialBufferValues)
 
