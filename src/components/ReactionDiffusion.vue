@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, toRaw, reactive} from 'vue'
+import { ref, onMounted, watch, toRaw, reactive, onUnmounted} from 'vue'
 import ReactionDiffusionModel from '../libs/rdmodel';
 import { Pane } from 'tweakpane';
 
 const tweakpaneContainer = ref<HTMLElement>()
 
 const PARAMS = reactive({
-  speed: 20,
+  speed: 200,
   diffuseRateU: 1.0,
   diffuseRateV: 0.5,
   feedRate: 0.055,
@@ -18,10 +18,12 @@ const RATE_SETTING = {
   max: 1
 }
 
+let rdmodel: ReactionDiffusionModel | undefined;
+
 onMounted(async () => {
   const canvas = document.querySelector('canvas') as HTMLCanvasElement
 
-  const rdmodel = await ReactionDiffusionModel.build(canvas)
+  rdmodel = await ReactionDiffusionModel.build(canvas)
 
   const pane = new Pane({
     container: tweakpaneContainer.value,
@@ -38,11 +40,14 @@ onMounted(async () => {
     title: 'Reset',
     label: 'Reset chemicals',   // optional
   });
+
   reset.on('click', () => {
+    if (!rdmodel) return
     rdmodel.resetChemicals();
   });
 
   watch(PARAMS, (newSettings) => {
+    if (!rdmodel) return
     const input = toRaw(newSettings)
     rdmodel.speed = input.speed
     rdmodel.uniforms.diffuseRateU = input.diffuseRateU
@@ -54,6 +59,12 @@ onMounted(async () => {
   }, { immediate: true })
 
   rdmodel.start()
+})
+
+onUnmounted(() => {
+  if (rdmodel) {
+    rdmodel.stop()
+  }
 })
 
 

@@ -1,6 +1,7 @@
 import { createNoise2D } from 'simplex-noise';
 import shaderString from '../assets/shaders/cellShader.wgsl?raw'
 import simulationShaderString from '../assets/shaders/simulationShader.wgsl?raw'
+import { FPSCounter } from './fpsCounter';
 
 const GRID_SIZE = 512;
 const WORKGROUP_SIZE = 8;
@@ -33,7 +34,13 @@ export default class ReactionDiffusionModel {
     simulationPipeline: GPUComputePipeline
     bindGroups: GPUBindGroup[]
 
-    uniforms: Uniforms
+    uniforms: Uniforms = {
+        deltaTime: 0.3,
+        diffuseRateU: 1.0,
+        diffuseRateV: 0.2,
+        feedRate: 0.07,
+        killRate: 0.02,
+    }
 
     step = 0
     
@@ -48,23 +55,20 @@ export default class ReactionDiffusionModel {
         -1.0,  1.0,
     ]);
     nextAnimationFrame: number = 0;
+    nextComputeFrame: number = 0;
     lastRenderMs: number = 0;
 
-    speed = 30
+    speed = 200
+
+    computeDt = 1
+    computeBatch = 5
+
     
     constructor(canvas: HTMLCanvasElement, adapter: GPUAdapter, device: GPUDevice, context: GPUCanvasContext) {
         this.canvas = canvas
         this.adapter = adapter
         this.device = device
         this.context = context
-
-        this.uniforms = {
-            deltaTime: 0.3,
-            diffuseRateU: 1.0,
-            diffuseRateV: 0.2,
-            feedRate: 0.07,
-            killRate: 0.02,
-        }
 
         this.lastRenderMs = performance.now()
         
@@ -90,7 +94,7 @@ export default class ReactionDiffusionModel {
         });
 
 
-        const chemicalBuffers = (chemicalName: string, initialFeed: number) => {
+        const chemicalBuffers = (chemicalName: string) => {
             const initialBufferValues = new Float32Array(GRID_SIZE * GRID_SIZE);
 
             const chemicalStorage = [
@@ -109,8 +113,8 @@ export default class ReactionDiffusionModel {
             return chemicalStorage
         }
 
-        this.chemicalUStorage = chemicalBuffers('u', 1)
-        this.chemicalVStorage = chemicalBuffers('v', .2)
+        this.chemicalUStorage = chemicalBuffers('u')
+        this.chemicalVStorage = chemicalBuffers('v')
 
         this.resetChemicals()
 
@@ -242,13 +246,13 @@ export default class ReactionDiffusionModel {
 
     resetChemicals() {
 
-        const U_START_RATIO = 1
-        const V_START_RATIO = 1
-        const NOISE_SCALE = 2^16
+        //const U_START_RATIO = 1
+        //const V_START_RATIO = 1
+        //const NOISE_SCALE = 2^16
 
-        const noise2D = createNoise2D();
-        const noiseFn = (x: number, y: number) => 
-            noise2D(x / NOISE_SCALE, y / NOISE_SCALE) / 2 + .5
+        //const noise2D = createNoise2D();
+        //const noiseFn = (x: number, y: number) => 
+        //    noise2D(x / NOISE_SCALE, y / NOISE_SCALE) / 2 + .5
 
         const stats = (temp1: Float32Array) => {
             const avg = temp1.reduce((a, b) => a + b, 0) / temp1.length;
@@ -257,10 +261,10 @@ export default class ReactionDiffusionModel {
             console.log(`Avg: ${avg}, [${min}, ${max}]`)
         }
         
-        const gridIndex = (i: number): [number, number] => [
-            i % GRID_SIZE,
-            Math.floor(i / GRID_SIZE),
-        ]
+        //const gridIndex = (i: number): [number, number] => [
+        //    i % GRID_SIZE,
+        //    Math.floor(i / GRID_SIZE),
+        //]
         
         const initialBufferValues = new Float32Array(GRID_SIZE * GRID_SIZE);
 
@@ -314,36 +318,53 @@ export default class ReactionDiffusionModel {
 
     start() {
         this.lastRenderMs = performance.now() - MAX_UPDATE_MS / 2
-        this.nextFrame(performance.now());
+        this.computeFrame();
+        this.renderFrame(performance.now());
     }
 
-    nextFrame(renderMs: number) {
-        this.render(Math.min(MAX_UPDATE_MS, renderMs - this.lastRenderMs));
+    computeFrame() {
+        this.compute(this.computeDt, this.computeBatch);
+        this.nextComputeFrame = setTimeout(this.computeFrame.bind(this), 1000 / this.speed) 
+    }
+
+    renderFrame(renderMs: number) {
+        this.render();
         this.lastRenderMs = renderMs
-        this.nextAnimationFrame = requestAnimationFrame(this.nextFrame.bind(this));
+        this.nextAnimationFrame = requestAnimationFrame(this.renderFrame.bind(this));
     }
 
     stop() {
         cancelAnimationFrame(this.nextAnimationFrame)
+        clearTimeout(this.nextComputeFrame)
     }
-    
-    render(deltaTimeMs: number, clearColor: GPUColor = { r: 0, g: 0, b: 0.4, a: 1 }) {
-        this.uniforms.deltaTime = deltaTimeMs / 1000 * this.speed;
+
+    compute(dt: number, computeBatch: number) {
+        this.uniforms.deltaTime = dt;
 
         this.device.queue.writeBuffer(this.uniformBuffer, 0, this.packUniforms());
 
         const encoder = this.device.createCommandEncoder();
 
-        const computePass = encoder.beginComputePass();
+        for (let passId = 0; passId < computeBatch; passId++) {
+            const computePass = encoder.beginComputePass();
 
-        computePass.setPipeline(this.simulationPipeline);
-        computePass.setBindGroup(0, this.bindGroups[this.step % 2]);
-        const workgroupCount = Math.ceil(GRID_SIZE / WORKGROUP_SIZE);
-        computePass.dispatchWorkgroups(workgroupCount, workgroupCount);
+            computePass.setPipeline(this.simulationPipeline);
+            computePass.setBindGroup(0, this.bindGroups[this.step % 2]);
+            const workgroupCount = Math.ceil(GRID_SIZE / WORKGROUP_SIZE);
+            computePass.dispatchWorkgroups(workgroupCount, workgroupCount);
 
-        computePass.end();
+            computePass.end();
+        
+            this.step++;
+        }
 
-        this.step++;
+        this.device.queue.submit([encoder.finish()]);
+    }
+    
+    render(clearColor: GPUColor = { r: 0, g: 0, b: 0.4, a: 1 }) {
+        this.device.queue.writeBuffer(this.uniformBuffer, 0, this.packUniforms());
+
+        const encoder = this.device.createCommandEncoder();
         
         const pass = encoder.beginRenderPass({
             colorAttachments: [{
