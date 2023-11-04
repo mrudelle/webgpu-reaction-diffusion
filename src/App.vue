@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import HelloWorld from './components/HelloWorld.vue'
+import ReactionDiffusion from './components/ReactionDiffusion.vue'
 </script>
 
 <template>
-  <HelloWorld/>
+  <ReactionDiffusion/>
 </template>
 
 <style scoped>
