@@ -42,7 +42,9 @@ fn vertexMain(
 fn fragmentMain(
     input: VertexOutput
 ) -> @location(0) vec4f {
-    let cell = input.fragUV * params.grid;
-    let ca = cellActive(u32(cell.x), u32(cell.y));
-    return vec4f(vec3f(input.fragUV, 1-input.fragUV.x) * ca, 1);
+    let cell = vec2u(input.fragUV * params.grid);
+    let ca = chemUState[cellIndex(cell)];
+    let cb = chemVState[cellIndex(cell)];
+    let abMix = (1 - cb + ca) / 2;
+    return vec4f(vec3f(2 * abMix - 1), 1);
 }
