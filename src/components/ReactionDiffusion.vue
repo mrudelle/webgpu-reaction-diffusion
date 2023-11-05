@@ -27,24 +27,47 @@ onMounted(async () => {
 
   const pane = new Pane({
     container: tweakpaneContainer.value,
-    title: 'WebGPU Reaction Diffusion'
+    title: 'WebGPU Reaction Diffusion 🧪'
   })
 
-  pane.addBinding(PARAMS, 'speed', {min: 0});
-  pane.addBinding(PARAMS, 'diffuseRateU', RATE_SETTING);
-  pane.addBinding(PARAMS, 'diffuseRateV', RATE_SETTING);
-  pane.addBinding(PARAMS, 'feedRate', {min: .002, max: .12});
-  pane.addBinding(PARAMS, 'killRate', {min: .045, max: .07});
+  const chemicalsFolder = pane.addFolder({
+    title: 'Chemicals'
+  })
 
-  const reset = pane.addButton({
+  chemicalsFolder.addBinding(PARAMS, 'diffuseRateU', RATE_SETTING);
+  chemicalsFolder.addBinding(PARAMS, 'diffuseRateV', RATE_SETTING);
+  chemicalsFolder.addBinding(PARAMS, 'feedRate', {min: .002, max: .12});
+  chemicalsFolder.addBinding(PARAMS, 'killRate', {min: .045, max: .07});
+
+  const reset = chemicalsFolder.addButton({
     title: 'Reset',
     label: 'Reset chemicals',   // optional
   });
+
+  const animationFolder = pane.addFolder({
+    title: 'Animation'
+  });
+
+  animationFolder.addBinding(PARAMS, 'speed', {min: 0});
+
+  const pause = animationFolder.addButton({
+    title: 'Pause',
+  })
 
   reset.on('click', () => {
     if (!rdmodel) return
     rdmodel.resetChemicals();
   });
+
+  pause.on('click', () => {
+    if (!rdmodel) return
+    if (rdmodel.playing) {
+      rdmodel.stop()
+    } else {
+      rdmodel.start()
+    }
+    pause.title = rdmodel.playing ? 'Pause' : 'Play'
+  })
 
   watch(PARAMS, (newSettings) => {
     if (!rdmodel) return
@@ -87,6 +110,6 @@ onUnmounted(() => {
   position: absolute;
   left: .8em;
   top: .8em;
-  width: 30em;
+  width: 20em;
 }
 </style>

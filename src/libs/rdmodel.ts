@@ -56,7 +56,6 @@ export default class ReactionDiffusionModel {
     ]);
     nextAnimationFrame: number = 0;
     nextComputeFrame: number = 0;
-    lastRenderMs: number = 0;
 
     // number of compute iterations per s
     speed = 200
@@ -68,14 +67,14 @@ export default class ReactionDiffusionModel {
     computeBatch = 20
 
     fpsCounter = new FPSCounter()
+
+    playing = false
     
     constructor(canvas: HTMLCanvasElement, adapter: GPUAdapter, device: GPUDevice, context: GPUCanvasContext) {
         this.canvas = canvas
         this.adapter = adapter
         this.device = device
         this.context = context
-
-        this.lastRenderMs = performance.now()
         
         this.vertexBuffer = device.createBuffer({
             label: "Cell vertices",
@@ -322,9 +321,9 @@ export default class ReactionDiffusionModel {
     }
 
     start() {
-        this.lastRenderMs = performance.now() - MAX_UPDATE_MS / 2
         this.computeFrame();
         this.renderFrame(performance.now());
+        this.playing = true;
     }
 
     computeFrame() {
@@ -335,13 +334,13 @@ export default class ReactionDiffusionModel {
 
     renderFrame(renderMs: number) {
         this.render();
-        this.lastRenderMs = renderMs
         this.nextAnimationFrame = requestAnimationFrame(this.renderFrame.bind(this));
     }
 
     stop() {
         cancelAnimationFrame(this.nextAnimationFrame)
         clearTimeout(this.nextComputeFrame)
+        this.playing = false;
     }
 
     compute(dt: number, computeBatch: number) {
