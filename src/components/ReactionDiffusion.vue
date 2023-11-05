@@ -6,7 +6,7 @@ import { Pane } from 'tweakpane';
 const tweakpaneContainer = ref<HTMLElement>()
 
 const PARAMS = reactive({
-  speed: 200,
+  speed: 1000,
   diffuseRateU: 1.0,
   diffuseRateV: 0.5,
   feedRate: 0.055,

@@ -58,11 +58,16 @@ export default class ReactionDiffusionModel {
     nextComputeFrame: number = 0;
     lastRenderMs: number = 0;
 
+    // number of compute iterations per s
     speed = 200
 
+    // DeltaT in Gray-Scott Model
     computeDt = 1
-    computeBatch = 5
 
+    // How many compute iterations are done per compute frame
+    computeBatch = 20
+
+    fpsCounter = new FPSCounter()
     
     constructor(canvas: HTMLCanvasElement, adapter: GPUAdapter, device: GPUDevice, context: GPUCanvasContext) {
         this.canvas = canvas
@@ -324,7 +329,8 @@ export default class ReactionDiffusionModel {
 
     computeFrame() {
         this.compute(this.computeDt, this.computeBatch);
-        this.nextComputeFrame = setTimeout(this.computeFrame.bind(this), 1000 / this.speed) 
+        const waitTime = 1000 / this.speed * this.computeBatch
+        this.nextComputeFrame = setTimeout(this.computeFrame.bind(this), waitTime) 
     }
 
     renderFrame(renderMs: number) {
@@ -356,6 +362,7 @@ export default class ReactionDiffusionModel {
             computePass.end();
         
             this.step++;
+            this.fpsCounter.tick()
         }
 
         this.device.queue.submit([encoder.finish()]);
